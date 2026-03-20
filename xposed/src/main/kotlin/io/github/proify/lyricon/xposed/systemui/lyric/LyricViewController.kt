@@ -10,15 +10,18 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.os.SystemClock
+import androidx.core.view.isVisible
 import com.highcapable.yukihookapi.hook.log.YLog
 import io.github.proify.lyricon.central.provider.player.ActivePlayerListener
+import io.github.proify.lyricon.lyric.model.RichLyricLine
 import io.github.proify.lyricon.lyric.model.Song
 import io.github.proify.lyricon.provider.ProviderInfo
 import io.github.proify.lyricon.statusbarlyric.StatusBarLyric
 import io.github.proify.lyricon.statusbarlyric.SuperLogo
-import io.github.proify.lyricon.xposed.systemui.util.LyricPrefs
+import io.github.proify.lyricon.xposed.systemui.setting.LyricPrefs
 import io.github.proify.lyricon.xposed.systemui.util.NotificationCoverHelper
 import io.github.proify.lyricon.xposed.systemui.util.OplusCapsuleHooker
+import io.github.proify.lyricon.xposed.systemui.util.XiaomiIslandHooker
 import java.io.File
 
 object LyricViewController : ActivePlayerListener, Handler.Callback,
@@ -37,8 +40,10 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
     private const val MSG_TRANSLATION_TOGGLE = 7
     private const val MSG_SHOW_ROMA = 8
     private const val MSG_SONG_TRANSLATED = 9
+    private const val MSG_SONG_TRANSLATION_TIMEOUT = 10
 
     private const val UPDATE_INTERVAL_MS = 1000L / 60L
+    private const val TRANSLATION_ONLY_WAIT_TIMEOUT_MS = 2500L
 
     @Volatile
     var isPlaying: Boolean = false
@@ -51,6 +56,12 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
     @Volatile
     var providerInfo: ProviderInfo? = null
         private set
+
+    @Volatile
+    private var isDisplayTranslation: Boolean = true
+
+    @Volatile
+    private var lastSong: Song? = null
 
     private val uiHandler by lazy { Handler(Looper.getMainLooper(), this) }
 
@@ -124,6 +135,7 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
     override fun onDisplayTranslationChanged(isDisplayTranslation: Boolean) {
         if (DEBUG) YLog.debug(tag = TAG, msg = "onDisplayTranslationChanged: $isDisplayTranslation")
 
+        this.isDisplayTranslation = isDisplayTranslation
         uiHandler.obtainMessage(MSG_TRANSLATION_TOGGLE, if (isDisplayTranslation) 1 else 0, 0)
             .sendToTarget()
     }
@@ -138,14 +150,29 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
     // --- 集中式 UI 处理逻辑 ---
     override fun handleMessage(msg: Message): Boolean {
         when (msg.what) {
-            MSG_PROVIDER_CHANGED -> songVersion++
-            MSG_SONG_CHANGED -> dispatchAutoTranslation(msg.obj as? Song)
+            // provider改变时，重置歌曲版本号和当前歌曲
+            MSG_PROVIDER_CHANGED -> {
+                songVersion++
+                lastSong = null
+            }
+            // 歌曲改变时，更新当前歌曲并触发自动翻译
+            MSG_SONG_CHANGED -> {
+                lastSong = msg.obj as? Song
+                dispatchAutoTranslation(lastSong)
+            }
+            // 翻译切换时，根据状态触发自动翻译
+            MSG_TRANSLATION_TOGGLE -> {
+                if (msg.arg1 == 1 || LyricPrefs.isTranslationOnlyInLyricEnabled()) {
+                    dispatchAutoTranslation(lastSong)
+                }
+            }
         }
 
         var ok = true
         forControllerEach {
             ok = handleMessageInternal(msg, this)
         }
+        syncVendorTemporaryUi()
         return ok
     }
 
@@ -159,23 +186,54 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
                     activePackage = providerInfo?.playerPackageName.orEmpty()
                     LyricPrefs.activePackageName = activePackage
 
+                    uiHandler.removeMessages(MSG_SONG_TRANSLATION_TIMEOUT)
                     view.setSong(null)
                     view.setPlaying(false)
                     controller.updateLyricStyle(LyricPrefs.getLyricStyle())
                     view.updateVisibility()
+                    applyLyricTranslationDisplay(view)
 
                     view.logoView.apply {
                         val activePackage = this@LyricViewController.activePackage
                         this.activePackage = activePackage
-                        coverFile = NotificationCoverHelper.getCoverFile(activePackage)
+                        val cover = NotificationCoverHelper.getCoverFile(activePackage)
+                        coverFile = cover
+                        controller.updateCoverThemeColors(cover)
                         post { providerLogo = provider?.logo }
                     }
                 }
 
                 MSG_SONG_CHANGED -> {
                     val song = msg.obj as? Song
-                    view.setSong(song)
+                    val flags = applyLyricTranslationDisplay(view)
+                    uiHandler.removeMessages(MSG_SONG_TRANSLATION_TIMEOUT)
+                    if (DEBUG) {
+                        val first = song?.lyrics?.firstOrNull()
+                        YLog.debug(
+                            tag = TAG,
+                            msg = "MSG_SONG_CHANGED flags=$flags firstLine(text=${first?.text}, translation=${first?.translation}, secondary=${first?.secondary})"
+                        )
+                    }
+
+                    if (song == null) {
+                        view.setSong(null)
+                    } else if (shouldWaitForAutoTranslation(song, flags)) {
+                        val timeout = uiHandler.obtainMessage(MSG_SONG_TRANSLATION_TIMEOUT, song)
+                        timeout.arg1 = (songVersion shr 32).toInt()
+                        timeout.arg2 = (songVersion and 0xFFFFFFFFL).toInt()
+                        uiHandler.sendMessageDelayed(timeout, TRANSLATION_ONLY_WAIT_TIMEOUT_MS)
+                        view.setSong(null)
+                    } else {
+                        view.setSong(
+                            if (flags.translationOnly) {
+                                toTranslationOnlySong(song)
+                            } else {
+                                song
+                            }
+                        )
+                    }
                 }
+
                 MSG_PLAYBACK_STATE -> view.setPlaying(msg.arg1 == 1)
                 MSG_POSITION -> {
                     val pos = (msg.arg1.toLong() shl 32) or (msg.arg2.toLong() and 0xFFFFFFFFL)
@@ -188,12 +246,46 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
                 }
 
                 MSG_SEND_TEXT -> view.setText(msg.obj as? String)
-                MSG_TRANSLATION_TOGGLE -> view.updateDisplayTranslation(displayTranslation = msg.arg1 == 1)
+                MSG_TRANSLATION_TOGGLE -> {
+                    val flags = applyLyricTranslationDisplay(view)
+                    val song = if (flags.translationOnly) {
+                        toTranslationOnlySong(lastSong)
+                    } else {
+                        lastSong
+                    }
+                    view.setSong(song)
+                }
+
                 MSG_SHOW_ROMA -> view.updateDisplayTranslation(displayRoma = msg.arg1 == 1)
                 MSG_SONG_TRANSLATED -> {
                     val version = msg.arg1.toLong() shl 32 or (msg.arg2.toLong() and 0xFFFFFFFFL)
                     if (version == songVersion) {
-                        view.setSong(msg.obj as? Song)
+                        uiHandler.removeMessages(MSG_SONG_TRANSLATION_TIMEOUT)
+                        val translated = msg.obj as? Song
+                        if (translated != null) {
+                            lastSong = translated
+                        }
+                        val flags = applyLyricTranslationDisplay(view)
+                        val song = if (flags.translationOnly) {
+                            toTranslationOnlySong(lastSong)
+                        } else {
+                            lastSong
+                        }
+                        view.setSong(song)
+                    }
+                }
+
+                MSG_SONG_TRANSLATION_TIMEOUT -> {
+                    val version = msg.arg1.toLong() shl 32 or (msg.arg2.toLong() and 0xFFFFFFFFL)
+                    if (version == songVersion) {
+                        val fallbackSong = (msg.obj as? Song) ?: lastSong
+                        val flags = applyLyricTranslationDisplay(view)
+                        val song = if (flags.translationOnly) {
+                            toTranslationOnlySong(fallbackSong)
+                        } else {
+                            fallbackSong
+                        }
+                        view.setSong(song)
                     }
                 }
             }
@@ -210,17 +302,161 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
         forViewEach {
             setOplusCapsuleVisibility(isShowing)
         }
+        syncVendorTemporaryUi()
     }
 
     override fun onCoverUpdated(packageName: String, coverFile: File) {
-        forViewEach {
-            logoView.apply {
+        forControllerEach {
+            val view = lyricView
+            view.logoView.apply {
                 if (packageName == activePackage && strategy is SuperLogo.CoverStrategy) {
                     this.coverFile = coverFile
                     strategy?.updateContent()
                 }
             }
+            if (packageName == activePackage) {
+                updateCoverThemeColors(coverFile)
+            }
         }
+        syncVendorTemporaryUi()
+    }
+
+    fun notifyLyricVisibilityChanged() {
+        syncVendorTemporaryUi()
+    }
+
+    fun refreshLyricTranslationDisplayConfig() {
+        val currentSong = lastSong
+        var shouldTriggerTranslation = false
+        forControllerEach {
+            val flags = applyLyricTranslationDisplay(lyricView)
+            if (flags.translationOnly && currentSong != null && shouldWaitForAutoTranslation(
+                    currentSong,
+                    flags
+                )
+            ) {
+                shouldTriggerTranslation = true
+            }
+            val song = if (flags.translationOnly) {
+                toTranslationOnlySong(currentSong)
+            } else {
+                currentSong
+            }
+            lyricView.setSong(song)
+        }
+        if (shouldTriggerTranslation) {
+            dispatchAutoTranslation(currentSong)
+        }
+        syncVendorTemporaryUi()
+    }
+
+    private data class TranslationDisplayFlags(
+        val showTranslation: Boolean,
+        val translationOnly: Boolean
+    )
+
+    private fun applyLyricTranslationDisplay(view: StatusBarLyric): TranslationDisplayFlags {
+        val hideTranslation = LyricPrefs.isHideTranslationInLyricEnabled()
+        val translationOnly = LyricPrefs.isTranslationOnlyInLyricEnabled()
+        val showTranslation = !hideTranslation && (isDisplayTranslation || translationOnly)
+        val showTranslationOnly = showTranslation && translationOnly
+        if (DEBUG) {
+            YLog.debug(
+                tag = TAG,
+                msg = "applyLyricTranslationDisplay pkg=$activePackage isDisplayTranslation=$isDisplayTranslation hideTranslation=$hideTranslation translationOnly=$translationOnly showTranslation=$showTranslation showTranslationOnly=$showTranslationOnly"
+            )
+        }
+        view.updateDisplayTranslation(displayTranslation = showTranslation)
+        return TranslationDisplayFlags(
+            showTranslation = showTranslation,
+            translationOnly = showTranslationOnly
+        )
+    }
+
+    private fun toTranslationOnlySong(song: Song?): Song? {
+        val input = song ?: return null
+        val copied = input.deepCopy()
+        val lines = copied.lyrics.orEmpty()
+        val timestampFallbackText = buildTimestampFallbackText(lines)
+        copied.lyrics = lines.map { line ->
+            val translationText = line.translation?.takeIf { it.isNotBlank() }
+                ?: line.translationWords
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.joinToString(separator = "") { it.text.orEmpty() }
+                ?: line.secondary?.takeIf { it.isNotBlank() }
+                ?: line.secondaryWords
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.joinToString(separator = "") { it.text.orEmpty() }
+                ?: timestampFallbackText[line.begin]
+                    ?.takeIf { fallback ->
+                        fallback.isNotBlank() && fallback != line.text?.trim().orEmpty()
+                    }
+            if (translationText.isNullOrBlank()) {
+                line
+            } else {
+                val translationWords = when {
+                    !line.translationWords.isNullOrEmpty() -> line.translationWords
+                    !line.secondaryWords.isNullOrEmpty() -> line.secondaryWords
+                    else -> null
+                }
+                line.copy(
+                    text = translationText,
+                    words = translationWords,
+                    secondary = null,
+                    secondaryWords = null,
+                    translation = null,
+                    translationWords = null,
+                    roma = null
+                )
+            }
+        }
+        return copied
+    }
+
+    private fun shouldWaitForAutoTranslation(song: Song, flags: TranslationDisplayFlags): Boolean {
+        if (!flags.translationOnly) return false
+
+        val settings = LyricPrefs.getActiveTranslationSettings()
+        if (!settings.isUsable) return false
+
+        val ignoreRegex = runCatching {
+            settings.ignoreRegex.takeIf { it.isNotBlank() }?.toRegex()
+        }.getOrNull()
+        val timestampHasDualText = buildTimestampHasDualText(song.lyrics.orEmpty())
+
+        return song.lyrics.orEmpty().any { line ->
+            val text = line.text?.trim().orEmpty()
+            text.isNotBlank()
+                    && line.translation.isNullOrBlank()
+                    && line.translationWords.isNullOrEmpty()
+                    && line.secondary.isNullOrBlank()
+                    && line.secondaryWords.isNullOrEmpty()
+                    && (timestampHasDualText[line.begin] != true)
+                    && (ignoreRegex?.matches(text) != true)
+        }
+    }
+
+    private fun buildTimestampFallbackText(lines: List<RichLyricLine>): Map<Long, String> {
+        return lines
+            .groupBy { it.begin }
+            .mapValues { (_, group) ->
+                val normalizedTexts = group
+                    .mapNotNull { it.text?.trim()?.takeIf(String::isNotBlank) }
+                    .distinct()
+                if (normalizedTexts.size >= 2) normalizedTexts.last() else ""
+            }
+            .filterValues(String::isNotEmpty)
+    }
+
+    private fun buildTimestampHasDualText(lines: List<RichLyricLine>): Map<Long, Boolean> {
+        return lines
+            .groupBy { it.begin }
+            .mapValues { (_, group) ->
+                group
+                    .mapNotNull { it.text?.trim()?.takeIf(String::isNotBlank) }
+                    .distinct()
+                    .size >= 2
+            }
     }
 
     private inline fun forControllerEach(crossinline block: StatusBarViewController.() -> Unit) {
@@ -241,7 +477,20 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
         }
     }
 
+    private fun syncVendorTemporaryUi() {
+        val enableXiaomiIslandHide = LyricPrefs.baseStyle.xiaomiIslandTempHideEnabled
+        val shouldHideXiaomiIsland = StatusBarViewManager.controllers.any { controller ->
+            val view = controller.lyricView
+            enableXiaomiIslandHide
+                    && view.isAttachedToWindow
+                    && view.isVisible
+        }
+        XiaomiIslandHooker.setHideByLyric(shouldHideXiaomiIsland)
+    }
+
     private fun dispatchAutoTranslation(song: Song?) {
+        if (!isDisplayTranslation && !LyricPrefs.isTranslationOnlyInLyricEnabled()) return
+
         val settings = LyricPrefs.getActiveTranslationSettings()
         if (!settings.isUsable || song == null) return
 

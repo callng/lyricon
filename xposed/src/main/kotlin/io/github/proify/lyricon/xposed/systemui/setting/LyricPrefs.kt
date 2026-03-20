@@ -6,10 +6,11 @@
 
 @file:Suppress("MemberVisibilityCanBePrivate")
 
-package io.github.proify.lyricon.xposed.systemui.util
+package io.github.proify.lyricon.xposed.systemui.setting
 
 import de.robv.android.xposed.XSharedPreferences
 import io.github.proify.lyricon.app.bridge.AppBridge
+import io.github.proify.lyricon.common.Constants
 import io.github.proify.lyricon.common.PackageNames
 import io.github.proify.lyricon.lyric.style.BasicStyle
 import io.github.proify.lyricon.lyric.style.LyricStyle
@@ -42,6 +43,8 @@ object LyricPrefs {
     private const val KEY_TRANSLATION_CACHE_SIZE = "lyric_translation_cache_size"
     private const val KEY_TRANSLATION_IGNORE_REGEX = "lyric_translation_ignore_regex"
     private const val KEY_TRANSLATION_CUSTOM_PROMPT = "lyric_translation_custom_prompt"
+    private const val KEY_TEXT_TRANSLATION_ONLY = "lyric_style_text_translation_only"
+    private const val KEY_TEXT_HIDE_TRANSLATION = "lyric_style_text_hide_translation"
 
     const val TRANSLATION_PROVIDER_OPENAI = "openai"
     const val TRANSLATION_PROVIDER_GEMINI = "gemini"
@@ -136,6 +139,7 @@ object LyricPrefs {
     }
 
     private fun isPackageEnabled(packageName: String): Boolean {
+        packageStyleManagerPrefs.ensureLatest()
         return runCatching {
             packageStyleManagerPrefs
                 .getStringSet(
@@ -164,9 +168,7 @@ object LyricPrefs {
     }
 
     private fun XSharedPreferences.ensureLatest(): XSharedPreferences {
-        if (hasFileChanged()) {
-            reload()
-        }
+        runCatching { reload() }
         return this
     }
 
@@ -226,6 +228,39 @@ object LyricPrefs {
             ?: fallback
     }
 
+    private fun readConfigBooleanWithFallback(
+        activePrefs: XSharedPreferences,
+        key: String,
+        fallback: Boolean
+    ): Boolean {
+        return when {
+            activePrefs.contains(key) -> activePrefs.getBoolean(key, fallback)
+            defaultPackageStylePrefs.contains(key) -> defaultPackageStylePrefs.getBoolean(key, fallback)
+            else -> fallback
+        }
+    }
+
+    fun isHideTranslationInLyricEnabled(): Boolean {
+        val activePrefs = getActivePackagePrefsForConfig().ensureLatest()
+        defaultPackageStylePrefs.ensureLatest()
+        return readConfigBooleanWithFallback(
+            activePrefs = activePrefs,
+            key = KEY_TEXT_HIDE_TRANSLATION,
+            fallback = false
+        )
+    }
+
+    fun isTranslationOnlyInLyricEnabled(): Boolean {
+        if (isHideTranslationInLyricEnabled()) return false
+        val activePrefs = getActivePackagePrefsForConfig().ensureLatest()
+        defaultPackageStylePrefs.ensureLatest()
+        return readConfigBooleanWithFallback(
+            activePrefs = activePrefs,
+            key = KEY_TEXT_TRANSLATION_ONLY,
+            fallback = false
+        )
+    }
+
     fun getActiveTranslationSettings(): TranslationSettings {
         val activePrefs = getActivePackagePrefsForConfig().ensureLatest()
         defaultPackageStylePrefs.ensureLatest()
@@ -259,7 +294,7 @@ object LyricPrefs {
         val customPrompt = readConfigStringWithFallback(
             activePrefs = activePrefs,
             key = KEY_TRANSLATION_CUSTOM_PROMPT,
-            fallback = io.github.proify.lyricon.common.Constants.DEFAULT_TRANSLATION_CUSTOM_PROMPT
+            fallback = Constants.DEFAULT_TRANSLATION_CUSTOM_PROMPT
         )
 
         return TranslationSettings(
