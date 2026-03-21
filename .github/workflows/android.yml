@@ -27,8 +27,29 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: 删除 Gradle 守护进程 JDK 配置
+        run: |
+          echo "检查并删除 Gradle 守护进程 JDK 配置..."
+          if [ -f "gradle/gradle-daemon-jvm.properties" ]; then
+            echo "找到配置文件, 正在删除..."
+            rm -f gradle/gradle-daemon-jvm.properties
+            echo "✅ 已删除 Gradle 守护进程 JDK 配置"
+          else
+            echo "✅ 没有找到配置文件, 无需删除"
+          fi
+
       - name: 授予 Gradle 执行权限
         run: chmod +x gradlew
+
+      - name: 修正 Gradle 配置文件
+        run: |
+          echo "正在修正 gradle.properties..."
+          if [ -f "gradle.properties" ]; then
+            sed -i 's/-XX:+CMSClassUnloadingEnabled//g' gradle.properties
+            sed -i 's/-Xmx8g/-Xmx4g/g' gradle.properties
+            sed -i 's/-XX:MaxMetaspaceSize=2g/-XX:MaxMetaspaceSize=1g/g' gradle.properties
+            echo "✅ 修正完成"
+          fi
 
       - name: 缓存 Gradle 依赖
         uses: actions/cache@v4
@@ -63,7 +84,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lyricon-${{ github.event.inputs.build_type }}-apk
-          path: lyricon/build/outputs/apk/${{ github.event.inputs.build_type }}/lyricon-${{ github.event.inputs.build_type }}.apk
+          path: lyricon/build/outputs/apk/${{ github.event.inputs.build_type }}/lyricon-*${{ github.event.inputs.build_type }}.apk
           if-no-files-found: warn
 
       - name: 清理敏感文件
