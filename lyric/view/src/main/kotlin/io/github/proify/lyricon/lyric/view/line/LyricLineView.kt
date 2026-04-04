@@ -102,27 +102,27 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
         reset()
     }
 
-    @Volatile
-    private var primaryColor: IntArray = intArrayOf(Color.BLACK)
-
-    @Volatile
-    private var backgroundColor: IntArray = intArrayOf(Color.WHITE)
-
-    @Volatile
-    private var highlightColor: IntArray = intArrayOf(Color.YELLOW)
+    private var primaryColor: IntArray = intArrayOf()
+    private var backgroundColor: IntArray = intArrayOf()
+    private var highlightColor: IntArray = intArrayOf()
 
     private fun updateColorInternal() {
-        updateColor(primaryColor, backgroundColor, highlightColor)
+        if (primaryColor.isNotEmpty()
+            && backgroundColor.isNotEmpty()
+            && highlightColor.isNotEmpty()
+        ) {
+            updateColor(primaryColor, backgroundColor, highlightColor)
+        }
     }
 
-    private var lastColorHash = 0
+    // private var lastColorHash = 0
     override fun updateColor(primary: IntArray, background: IntArray, highlight: IntArray) {
-        var hash = primary.contentHashCode()
-        hash = hash * 31 + background.contentHashCode()
-        hash = hash * 31 + highlight.contentHashCode()
-
-        if (hash == lastColorHash) return
-        lastColorHash = hash
+//        var hash = primary.contentHashCode()
+//        hash = hash * 31 + background.contentHashCXode()
+//        hash = hash * 31 + highlight.contentHashCode()
+//
+//        if (hash == lastColorHash) return
+//        lastColorHash = hash
 
         primaryColor = primary
         backgroundColor = background

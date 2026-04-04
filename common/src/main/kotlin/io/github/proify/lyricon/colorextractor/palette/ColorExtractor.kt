@@ -9,7 +9,6 @@ package io.github.proify.lyricon.colorextractor.palette
 import android.graphics.Bitmap
 import androidx.core.graphics.scale
 import com.materialkolor.hct.Hct
-import com.materialkolor.palettes.TonalPalette
 import com.materialkolor.quantize.QuantizerCelebi
 import com.materialkolor.score.Score
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +19,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * 针对音乐播放器优化的颜色提取器。
- * 核心逻辑：完全基于封面主色的同色相变体生成渐变，确保视觉统一。
+ * 核心逻辑：手动强制干预 HCT 分量，确保暗色模式下的颜色足够明亮。
  */
 object ColorExtractor {
 
@@ -28,14 +27,8 @@ object ColorExtractor {
     private const val DEFAULT_SEED_COLOR = 0xFF6750A4.toInt()
     private const val MAX_IMAGE_DIMENSION = 128
 
-    /** 亮色模式：主色调的浓郁变体 (Tone 40 -> 80) */
-    private val LIGHT_TONES = intArrayOf(40, 48, 56, 64, 72, 80)
-
-    /** 暗色模式：主色调的明亮变体 (Tone 25 -> 55) */
-    private val DARK_TONES = intArrayOf(25, 31, 37, 43, 49, 55)
-
     /**
-     * 异步提取 [bitmap] 的主色并生成同色相渐变。
+     * 异步提取颜色并生成调亮后的暗色模式色板。
      */
     fun extractAsync(bitmap: Bitmap, callback: (ColorPaletteResult?) -> Unit) {
         scope.launch {
@@ -54,17 +47,15 @@ object ColorExtractor {
 
                 if (scaledBitmap != bitmap) scaledBitmap.recycle()
 
-                // 1. 获取量化结果
                 val quantizerResult = QuantizerCelebi.quantize(pixels, 128)
-
-                // 2. 评分获取最核心的主色
                 val rankedColors = Score.score(quantizerResult)
                 val seedColor = rankedColors.firstOrNull() ?: DEFAULT_SEED_COLOR
 
-                // 3. 生成基于单一主色的结果
                 val result = ColorPaletteResult(
-                    lightModeColors = generateSingleHueSwatches(seedColor, LIGHT_TONES),
-                    darkModeColors = generateSingleHueSwatches(seedColor, DARK_TONES)
+                    // 亮色模式维持原样
+                    lightModeColors = generateSwatches(seedColor, isDarkMode = false),
+                    // 暗色模式进行手动强制调亮
+                    darkModeColors = generateSwatches(seedColor, isDarkMode = true)
                 )
 
                 withContext(Dispatchers.Main) {
@@ -77,20 +68,27 @@ object ColorExtractor {
     }
 
     /**
-     * 基于单一颜色种子，在同色相空间内根据不同 Tone 生成渐变色。
+     * 手动调整 HCT 分量生成颜色。
+     * @param isDarkMode 是否为暗色模式，如果是，则强制提升 Tone。
      */
-    private fun generateSingleHueSwatches(seedColor: Int, tones: IntArray): ThemeColors {
-        val hct = Hct.fromInt(seedColor)
+    private fun generateSwatches(seedColor: Int, isDarkMode: Boolean): ThemeColors {
+        val baseHct = Hct.fromInt(seedColor)
+        val hue = baseHct.hue
+        // 保证色彩存在感，不低于 40
+        val chroma = baseHct.chroma.coerceAtLeast(40.0)
 
-        // 保证彩度足够，避免主色变体看起来像灰色
-        val chroma = hct.chroma.coerceAtLeast(40.0)
-        val tonalPalette = TonalPalette.fromHueAndChroma(hct.hue, chroma)
-
-        val swatches = IntArray(tones.size) { i ->
-            tonalPalette.tone(tones[i])
+        // 定义暗色模式下的阶梯亮度 (从很亮到极亮)
+        val targetTones = if (isDarkMode) {
+            doubleArrayOf(75.0, 80.0, 85.0, 90.0, 94.0, 98.0)
+        } else {
+            doubleArrayOf(40.0, 48.0, 56.0, 64.0, 72.0, 80.0)
         }
 
-        // 使用第一个 Tone 作为 primary 代表色
+        val swatches = IntArray(targetTones.size) { i ->
+            // 核心修改点：直接新建 HCT 实例，强制注入目标亮度
+            Hct.from(hue, chroma, targetTones[i]).toInt()
+        }
+
         return ThemeColors(swatches[0], swatches)
     }
 

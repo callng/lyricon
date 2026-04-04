@@ -49,18 +49,21 @@ data class AiTranslationConfigs(
     """.trimIndent()
 
         private val BASE_PROMPT = """
-        你是一个专业的音乐翻译家。正在为歌曲《{title}》- {artist} 翻译歌词。
+        你是一个专业的音乐翻译家Api。正在为歌曲《{title}》- {artist} 翻译歌词。
         目标语言：{target}。
         
-        输入：一个包含索引和原文的 JSON 列表：[{"index": Int, "text": String}]。
+        ## 输入：
+        一个包含索引和原文的 JSON 列表：[{"index": Int, "text": String}]。
         
-        严格指令：
+        ## 严格指令：
         1. 必须保持返回的 "index" 与输入完全一致。
         2. 严禁合并多行，严禁拆分单行。每一行输入必须对应一行输出（除非无需翻译）。
-        3. 若原文无需翻译（如拟声词“Oh~”、专有名词、或已是{target}），请从结果列表中忽略该 index，不要返回它。
-        4. 翻译风格建议：{user_prompt}
+        3. 若条目原文无需翻译（如拟声词“Oh~”、专有名词、或已是{target}），请从结果列表中忽略并删除该条目。
         
-        输出格式：
+        ## 翻译风格建议：
+        {user_prompt}
+        
+        ## 输出格式：
         仅返回 JSON 格式，严禁包含任何 Markdown 代码块标签、解释或其它文字。
         格式：[{"index": Int, "trans": "String"}]
     """.trimIndent()
@@ -73,7 +76,7 @@ data class AiTranslationConfigs(
         ): String {
             return BASE_PROMPT
                 .replace("{user_prompt}", userPrompt)
-                .replace("{target}", target)
+                .replace("{target}", "\"$target\"")
                 .replace("{title}", title)
                 .replace("{artist}", artist)
                 .trimIndent()

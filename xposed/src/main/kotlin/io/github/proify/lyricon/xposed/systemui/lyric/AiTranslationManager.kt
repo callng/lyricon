@@ -21,6 +21,7 @@ import com.aallam.openai.client.OpenAIConfig
 import com.aallam.openai.client.OpenAIHost
 import io.github.proify.android.extensions.json
 import io.github.proify.lyricon.lyric.model.Song
+import io.github.proify.lyricon.lyric.model.extensions.deepCopy
 import io.github.proify.lyricon.lyric.style.AiTranslationConfigs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.security.MessageDigest
 import java.util.Collections
@@ -85,7 +87,9 @@ object AiTranslationManager {
                     it.printStackTrace()
                     song
                 }
-            callback(result)
+            withContext(Dispatchers.Main) {
+                callback(result)
+            }
         }
     }
 
@@ -115,19 +119,22 @@ object AiTranslationManager {
     }
 
     private fun applyTranslation(song: Song, transItems: List<TranslationItem>): Song {
-        val itemsMap = transItems.associateBy { it.index }
-        return song.deepCopy().apply {
-            lyrics = lyrics?.mapIndexed { index, line ->
-                val transItem = itemsMap[index]
+       /// val itemsMap = transItems.associateBy { it.index }
+
+        return song.apply {
+            lyrics = lyrics?.deepCopy()?.mapIndexed { index, line ->
+
+                val transItem = transItems.find {
+                    it.index == index
+                }
                 val transText = transItem?.trans
 
-                // 增强判定：仅当翻译文本有效且不等于原文时应用
                 if (!transText.isNullOrBlank()
                     && line.translation.isNullOrBlank()
                     && transText.trim().lowercase() != line.text?.trim()?.lowercase()
                 ) {
                     line.copy(translation = transText.trim(), translationWords = null)
-                } else line
+                } else line.copy()
             }
         }
     }

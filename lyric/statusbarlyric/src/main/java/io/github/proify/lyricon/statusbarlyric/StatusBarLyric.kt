@@ -113,12 +113,9 @@ class StatusBarLyric(
             updateVisibility()
 
             //修复在歌词播放结束时，来回切换StatusBarLyric可见性，导致颜色异常透明问题
-            post {
-                val old = currentStatusColor
-                setStatusBarColor(StatusColor())
-                setStatusBarColor(old)
-            }
-
+            val old = currentStatusColor
+            setStatusBarColor(StatusColor())
+            setStatusBarColor(old)
         }
 
     // --- 系统 / 辅助组件 ---

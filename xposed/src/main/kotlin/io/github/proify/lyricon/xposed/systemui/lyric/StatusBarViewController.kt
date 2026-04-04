@@ -101,7 +101,7 @@ class StatusBarViewController(
         val textStyle = currentLyricStyle.packageStyle.text
         lyricView.apply {
             currentStatusColor.apply {
-                this.darkIntensity = darkIntensity
+                this.darkIntensity = systemStatusBarColor.darkIntensity
 
                 val coverColorPaletteResult = coverColorPaletteResult
                 when {

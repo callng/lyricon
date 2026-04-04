@@ -149,10 +149,11 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
             }
 
             WHAT_SONG_CHANGED -> {
+                songDataVersion++
                 val song = msg.obj as? Song
                 rawSong = song
                 currentSong = song
-                if (song != null) startAiTranslationTask(song)
+                if (song != null) startAiTranslationTask(song.deepCopy())
             }
 
             WHAT_PLAYBACK_STATE_CHANGED -> {
