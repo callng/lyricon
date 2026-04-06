@@ -10,12 +10,12 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import com.highcapable.yukihookapi.hook.log.YLog
-import io.github.proify.lyricon.central.provider.player.ActivePlayerListener
 import io.github.proify.lyricon.lyric.model.Song
 import io.github.proify.lyricon.lyric.style.LyricStyle
-import io.github.proify.lyricon.provider.ProviderInfo
 import io.github.proify.lyricon.statusbarlyric.StatusBarLyric
 import io.github.proify.lyricon.statusbarlyric.SuperLogo
+import io.github.proify.lyricon.subscriber.ActivePlayerListener
+import io.github.proify.lyricon.subscriber.ProviderInfo
 import io.github.proify.lyricon.xposed.systemui.util.NotificationCoverHelper
 import io.github.proify.lyricon.xposed.systemui.util.OplusCapsuleHooker
 import java.io.File
@@ -118,7 +118,7 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
         sendLongMessage(WHAT_SEEK_TO, position)
     }
 
-    override fun onSendText(text: String?) {
+    override fun onReceiveText(text: String?) {
         uiHandler.obtainMessage(WHAT_TEXT_RECEIVED, text).sendToTarget()
     }
 
@@ -128,9 +128,9 @@ object LyricViewController : ActivePlayerListener, Handler.Callback,
             .sendToTarget()
     }
 
-    override fun onDisplayRomaChanged(displayRoma: Boolean) {
-        this.isDisplayRoma = displayRoma
-        uiHandler.obtainMessage(WHAT_ROMA_TOGGLE, if (displayRoma) 1 else 0, 0).sendToTarget()
+    override fun onDisplayRomaChanged(isDisplayRoma: Boolean) {
+        this.isDisplayRoma = isDisplayRoma
+        uiHandler.obtainMessage(WHAT_ROMA_TOGGLE, if (isDisplayRoma) 1 else 0, 0).sendToTarget()
     }
 
     // --- Core Logic & Handler ---

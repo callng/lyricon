@@ -199,6 +199,8 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
 
         animationDriver.stop()
         animationDriver.startIfNoRunning()
+
+        updateColorInternal()
         invalidate()
     }
 
@@ -312,6 +314,7 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
         lyric = line?.normalize()?.createModel() ?: emptyLyricModel()
 
         refreshModelSizes()
+        updateColorInternal()
         invalidate()
     }
 
@@ -421,7 +424,6 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
             }
         }
     }
-
 
     private fun createRainbowShader(colors: IntArray): Shader {
         val positions = FloatArray(colors.size) { i ->

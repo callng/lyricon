@@ -40,33 +40,64 @@ data class AiTranslationConfigs(
     }
 
     companion object {
-        val USER_PROMPT = """
-        歌词翻译准则：
-        1. 语义：保留核心意象与情感，文化专有名词用功能对等表达。
-        2. 韵律：匹配原歌词音节数，根据曲风押韵。
-        3. 风格：根据歌曲背景（流行/说唱/民谣）调整语气。
-        4. 本地化：规避目标文化禁忌。
-    """.trimIndent()
 
         private val BASE_PROMPT = """
-        你是一个专业的音乐翻译家Api。正在为歌曲《{title}》- {artist} 翻译歌词。
-        目标语言：{target}。
-        
-        ## 输入：
-        一个包含索引和原文的 JSON 列表：[{"index": Int, "text": String}]。
-        
-        ## 严格指令：
-        1. 必须保持返回的 "index" 与输入完全一致。
-        2. 严禁合并多行，严禁拆分单行。每一行输入必须对应一行输出（除非无需翻译）。
-        3. 若条目原文无需翻译（如拟声词“Oh~”、专有名词、或已是{target}），请从结果列表中忽略并删除该条目。
-        
-        ## 翻译风格建议：
-        {user_prompt}
-        
-        ## 输出格式：
-        仅返回 JSON 格式，严禁包含任何 Markdown 代码块标签、解释或其它文字。
-        格式：[{"index": Int, "trans": "String"}]
-    """.trimIndent()
+# 任务
+将输入 JSON 数组中的歌词行转写为 TARGET 语言，仅输出合规 JSON。
+
+# 参数
+TARGET={target}
+TITLE={title}
+ARTIST={artist}
+RULES={user_prompt}
+
+# 输入
+格式：[{"index":Int,"text":String},...]
+
+# 输出（强制）
+1. 仅输出 JSON 数组，禁止任何非 JSON 内容。
+2. 每个元素必须为：{"index":Int,"trans":String}
+3. index 必须来自输入，且唯一；输出按 index 升序。
+4. 可输出空数组 []。
+
+# 处理规则
+对每条记录执行：
+
+## 1. 省略（仅当全部满足）
+- text 仅包含：数字/标点/空白/无语义拟声（如 la la, oh）
+- 不包含任何可表达语义的词
+→ 满足则不输出
+
+## 2. 转译（否则必须输出）
+- 输出 {"index":原index,"trans":译文}
+- 译文必须：
+  - 语义等效
+  - 表达自然（符合 TARGET）
+  - 必要时做文化替换
+  - 不得附加解释、注释、括号说明、双语
+
+## 3. 歧义
+无法确定是否可省略 → 必须转译并输出
+
+# 示例
+输入：[{"index":0,"text":"Hello"},{"index":1,"text":"La la"}]
+输出：[{"index":0,"trans":"你好"}]
+""".trimIndent()
+
+        val USER_PROMPT = """
+[强制性本地化规范]
+1. 语义优先原则：优先保证语义、情绪、语气、叙述功能一致；禁止逐词直译导致失真。
+2. 自然表达原则：译文必须符合目标语言的常见表达方式，不得保留不自然的中式、英式、日式或其他源语痕迹。
+3. 区域适配原则：必须遵循目标语言的地区规范，包括但不限于：
+   - 中文繁体与简体；
+   - 英式英语与美式英语；
+   - 葡萄牙语葡萄牙标准与巴西标准；
+   - 同一语言在不同地区的常用词、拼写、标点与敬语差异。
+4. 文化等效原则：遇到俚语、隐喻、典故、双关、宗教或地域文化表达时，必须改写为 TARGET 中功能等效且自然可懂的表达；禁止机械保留字面形式。
+5. 演唱适配原则：在不损害语义的前提下，尽量保持节奏顺畅、口型自然、朗读连贯。
+6. 禁止解释原则：输出只允许是译文本身，不得附加解释、注释、说明、补充括号或翻译理由。
+7. 术语一致原则：同一专有名词、称呼、固定意象在全文中应保持一致译法。
+""".trimIndent()
 
         fun getPrompt(
             target: String,
@@ -74,12 +105,18 @@ data class AiTranslationConfigs(
             artist: String,
             userPrompt: String = USER_PROMPT
         ): String {
+            fun escape(s: String) = s.replace("\n", " ").replace("\r", " ")
+
             return BASE_PROMPT
                 .replace("{user_prompt}", userPrompt)
-                .replace("{target}", "\"$target\"")
-                .replace("{title}", title)
-                .replace("{artist}", artist)
-                .trimIndent()
+                .replace("{title}", escape(title))
+                .replace("{artist}", escape(artist))
+                .replace("{target}", escape(target))
+        }
+
+        fun cleanLlmOutput(raw: String): String {
+            val regex = Regex("```(?:json)?\\s*([\\s\\S]*?)```")
+            return regex.find(raw)?.groupValues?.get(1)?.trim() ?: raw.trim()
         }
     }
 }
