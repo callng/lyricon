@@ -4,7 +4,7 @@
   <img src="resources/logo.svg" width="100" alt="词幕 Logo"/>
 </p>
 
-<h1 align="center">词幕 (Lyricon)</h1>
+<h1 align="center">词幕</h1>
 
 <p align="center">
   <b>基于 Xposed 框架的 Android 状态栏歌词增强工具</b>
@@ -41,7 +41,7 @@
 
 ### 📋 环境要求
 
-- **系统版本**：Android 8.1 (API 27) 及以上。
+- **系统版本**：Android 9.0 (API 28) 及以上。
 - **前置条件**：设备需获取 **Root** 权限，并安装 **LSPosed**（或兼容的 Xposed）框架。
 
 > [!TIP]
