@@ -1,17 +1,14 @@
-# Lyricon 歌词订阅
+# Lyricon Lyrics Subscription
 
-## 一、添加依赖
-
+## 1. Adding Dependencies
 ![version](https://img.shields.io/maven-central/v/io.github.proify.lyricon/subscriber)
 
-在`build.gradle.kts` 中添加依赖：
-
+Add dependencies in `build.gradle.kts`:
 ```kotlin
 implementation("io.github.proify.lyricon:subscriber:0.1.70")
 ```
 
-## 二、创建 `LyriconSubscriber`
-
+## 2. Create `LyriconSubscriber`
 ```kotlin
 val subscriber = LyriconFactory.createSubscriber(context)
 subscriber.subscribeActivePlayer(...)
