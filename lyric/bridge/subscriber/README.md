@@ -1,5 +1,8 @@
 # Lyricon 歌词订阅
 
+> [!WARNING]
+> 需要按照[核心服务](https://github.com/tomakino/lyricon/releases/tag/core)
+
 ## 一、添加依赖
 
 ![version](https://img.shields.io/maven-central/v/io.github.proify.lyricon/subscriber)
