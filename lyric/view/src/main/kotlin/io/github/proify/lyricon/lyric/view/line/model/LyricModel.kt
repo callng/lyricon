@@ -36,6 +36,22 @@ data class LyricModel(
             previous = word
         }
     }
+
+    /**
+     * 获取文字绘制所需的实际宽度
+     */
+    private fun getTextFullWidth(paint: Paint, text: String): Float {
+        val measureWidth = paint.measureText(text)
+        val bounds = Rect()
+        paint.getTextBounds(text, 0, text.length, bounds)
+
+        // 如果 bounds.right 大于 measureWidth，说明文字向右侧溢出了
+        return if (bounds.right > measureWidth) {
+            bounds.right.toFloat()
+        } else {
+            measureWidth
+        }
+    }
 }
 
 internal fun emptyLyricModel(): LyricModel = LyricModel(
