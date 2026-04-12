@@ -77,7 +77,8 @@
 - **Sollin Player**
 - [**QZ Music**](https://github.com/lqtmcstudio/QZMusic)
 
-没有你的音乐播放器？请[提交 issue](https://github.com/tomakino/lyricon/pulls)。
+#### 已适配了但没有你的播放器？请[提交 issue](https://github.com/tomakino/lyricon/issues)。
+
 ---
 
 ## 👥 贡献者
