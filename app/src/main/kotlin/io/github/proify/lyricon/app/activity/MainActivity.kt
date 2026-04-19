@@ -7,6 +7,7 @@ package io.github.proify.lyricon.app.activity
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -47,13 +48,13 @@ import androidx.lifecycle.lifecycleScope
 import io.github.proify.android.extensions.defaultSharedPreferences
 import io.github.proify.lyricon.app.BuildConfig
 import io.github.proify.lyricon.app.LyriconApp
-import io.github.proify.lyricon.app.LyriconApp.Companion.systemUIChannel
 import io.github.proify.lyricon.app.R
 import io.github.proify.lyricon.app.activity.lyric.BasicLyricStyleActivity
 import io.github.proify.lyricon.app.activity.lyric.pkg.PackageStyleActivity
 import io.github.proify.lyricon.app.activity.lyric.provider.LyricProviderActivity
 import io.github.proify.lyricon.app.bridge.AppBridge
 import io.github.proify.lyricon.app.bridge.AppBridgeConstants
+import io.github.proify.lyricon.app.bridge.LyriconBridge
 import io.github.proify.lyricon.app.compose.AppToolBarListContainer
 import io.github.proify.lyricon.app.compose.EmojiInfiniteQueuePlayer
 import io.github.proify.lyricon.app.compose.MaterialPalette
@@ -66,6 +67,7 @@ import io.github.proify.lyricon.app.util.Utils
 import io.github.proify.lyricon.app.util.collectEvent
 import io.github.proify.lyricon.app.util.editCommit
 import io.github.proify.lyricon.app.util.restartApp
+import io.github.proify.lyricon.common.PackageNames
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponentColors
@@ -88,6 +90,7 @@ class MainActivity : BaseActivity() {
 
     private companion object {
         const val PREF_KEY_LAST_VERSION = "last_version"
+        private const val TAG = "MainActivity"
     }
 
     private val viewModel: MainViewModel by viewModels()
@@ -125,16 +128,21 @@ class MainActivity : BaseActivity() {
         collectEvent<SettingChangedEvent>(state = Lifecycle.State.CREATED) {
             recreate()
         }
-
-        systemUIChannel.wait<Boolean>(
-            key = AppBridgeConstants.REQUEST_CHECK_SAFE_MODE_CALLBACK
-        ) { isSafe ->
-            viewModel.updateSafeMode(isSafe)
-        }
     }
 
     private fun requestSafeModeCheck() {
-        systemUIChannel.put(key = AppBridgeConstants.REQUEST_CHECK_SAFE_MODE)
+        lifecycleScope.launch {
+            try {
+                val response = LyriconBridge.with(this@MainActivity)
+                    .to(PackageNames.SYSTEM_UI_PLUGIN)
+                    .key(AppBridgeConstants.REQUEST_CHECK_SAFE_MODE)
+                    .await()
+
+                viewModel.updateSafeMode(response.getBoolean("result"))
+            } catch (e: Exception) {
+                Log.e(TAG, "IPC 调用失败: ${e.message}", e)
+            }
+        }
     }
 
     private fun restartSystemUI() {

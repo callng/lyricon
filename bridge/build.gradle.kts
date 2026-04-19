@@ -48,12 +48,16 @@ configure<LibraryExtension> {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    buildFeatures {
+        buildConfig = true
+        aidl = true
+    }
 }
 
 dependencies {
     implementation(project(":common"))
     implementation(libs.androidx.core.ktx)
-    implementation(libs.yukihookapi.api)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

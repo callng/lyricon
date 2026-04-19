@@ -17,12 +17,14 @@ object StatusBarViewManager {
 
     fun add(controller: StatusBarViewController) {
         if (_controllers.contains(controller)) return
+
         _controllers.add(controller)
         controller.onCreate()
     }
 
     fun remove(controller: StatusBarViewController) {
         if (!_controllers.contains(controller)) return
+
         _controllers.remove(controller)
         controller.onDestroy()
     }

@@ -8,9 +8,9 @@
 
 package io.github.proify.lyricon.xposed.systemui.util
 
-import com.highcapable.yukihookapi.hook.log.YLog
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
+import io.github.proify.lyricon.xposed.log.YLog
 import java.util.concurrent.CopyOnWriteArraySet
 
 /**
@@ -62,14 +62,14 @@ object StatusBarDisableHooker {
                             try {
                                 it.onDisableStateChanged(shouldHide, animate)
                             } catch (e: Exception) {
-                                YLog.error("$TAG -> 分发监听失败: ${e.message}")
+                                YLog.error(TAG, "分发监听失败", e)
                             }
                         }
                     }
                 }
             )
         } catch (e: Throwable) {
-            YLog.error("$TAG -> Hook 注入失败: ${e.message}")
+            YLog.error(TAG, "$TAG -> Hook 注入失败: ${e.message}")
         }
     }
 

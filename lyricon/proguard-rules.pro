@@ -8,3 +8,5 @@
     public static int w(...);
     public static int e(...);
 }
+
+-keepattributes !SourceFile,!LineNumberTable,!LocalVariableTable,!LocalVariableTypeTable,!MethodParameters

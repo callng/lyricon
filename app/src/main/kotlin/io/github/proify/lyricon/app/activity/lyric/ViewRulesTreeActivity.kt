@@ -30,9 +30,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import io.github.proify.lyricon.app.LyriconApp.Companion.systemUIChannel
 import io.github.proify.lyricon.app.R
 import io.github.proify.lyricon.app.bridge.AppBridgeConstants
+import io.github.proify.lyricon.app.bridge.LyriconBridge
 import io.github.proify.lyricon.app.compose.MaterialPalette
 import io.github.proify.lyricon.app.compose.custom.bonsai.core.node.Node
 import io.github.proify.lyricon.app.compose.custom.miuix.extra.SuperCheckbox
@@ -40,6 +40,7 @@ import io.github.proify.lyricon.app.compose.theme.CurrentThemeConfigs
 import io.github.proify.lyricon.app.util.AppThemeUtils
 import io.github.proify.lyricon.app.util.LyricPrefs
 import io.github.proify.lyricon.app.util.updateRemoteLyricStyle
+import io.github.proify.lyricon.common.PackageNames
 import io.github.proify.lyricon.common.util.ViewTreeNode
 import io.github.proify.lyricon.lyric.style.VisibilityRule
 import top.yukonga.miuix.kmp.basic.Card
@@ -85,7 +86,11 @@ class ViewRulesTreeActivity : ViewTreeActivity() {
     }
 
     private fun highlightView(id: String) {
-        systemUIChannel.put(AppBridgeConstants.REQUEST_HIGHLIGHT_VIEW, id)
+        LyriconBridge.with(this)
+            .to(PackageNames.SYSTEM_UI)
+            .key(AppBridgeConstants.REQUEST_HIGHLIGHT_VIEW)
+            .payload("id" to id)
+            .send()
     }
 
     @Composable

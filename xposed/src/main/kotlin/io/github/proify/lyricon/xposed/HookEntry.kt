@@ -6,36 +6,31 @@
 
 package io.github.proify.lyricon.xposed
 
-import com.highcapable.yukihookapi.YukiHookAPI
-import com.highcapable.yukihookapi.annotation.xposed.InjectYukiHookWithXposed
-import com.highcapable.yukihookapi.hook.xposed.proxy.IYukiHookXposedInit
+import androidx.annotation.Keep
+import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.proify.lyricon.common.PackageNames
 import io.github.proify.lyricon.xposed.systemui.Directory
 import io.github.proify.lyricon.xposed.systemui.SystemUIHooker
 
-@InjectYukiHookWithXposed(modulePackageName = PackageNames.APPLICATION)
-open class HookEntry : IYukiHookXposedInit {
+@Keep
+class HookEntry : IXposedHookLoadPackage {
 
-    override fun onHook() {
-        YukiHookAPI.encase {
-            onAppLifecycle {
-                onCreate {
-                    Directory.initialize(applicationContext)
-                }
-            }
-            loadApp(PackageNames.APPLICATION, AppHooker)
-            loadApp(PackageNames.SYSTEM_UI, SystemUIHooker)
-            //loadApp(PackageNames.SYSTEM_UI_PLUGIN, SystemUIHooker)
+    private lateinit var helper: PackageHelper
+
+    override fun handleLoadPackage(packageParam: XC_LoadPackage.LoadPackageParam?) {
+        if (packageParam == null) return
+        helper = PackageHelper(packageParam)
+        helper.doOnAppCreated { Directory.initialize(it) }
+
+        when (packageParam.packageName) {
+            PackageNames.APPLICATION -> loadApp(AppHooker)
+            PackageNames.SYSTEM_UI -> loadApp(SystemUIHooker)
         }
     }
 
-    override fun onInit() {
-        YukiHookAPI.configs {
-            debugLog {
-                tag = "Lyricon"
-                isEnable = true
-                elements(TAG, PRIORITY, PACKAGE_NAME, USER_ID)
-            }
-        }
+    private fun loadApp(hooker: BaseHooker) {
+        hooker.onAttach(helper)
+        hooker.onHook()
     }
 }

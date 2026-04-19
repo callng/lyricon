@@ -6,32 +6,30 @@
 
 package io.github.proify.lyricon.xposed
 
-import com.highcapable.kavaref.KavaRef.Companion.resolve
-import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
+import android.content.Context
+import de.robv.android.xposed.XC_MethodReplacement
+import de.robv.android.xposed.XposedHelpers
 import io.github.proify.lyricon.app.bridge.AppBridge
-import io.github.proify.lyricon.app.bridge.FrameworkInfo
 import io.github.proify.lyricon.xposed.systemui.Directory
 
-object AppHooker : YukiBaseHooker() {
+object AppHooker : BaseHooker() {
 
     override fun onHook() {
         val preferenceDirectory = Directory.preferenceDirectory
-        val frameworkInfo = resolveFrameworkInfo()
 
-        AppBridge::class.java.name.toClass()
-            .resolve().apply {
-                firstMethod {
-                    name = "getPreferenceDirectory"
-                }.hook {
-                    replaceTo(preferenceDirectory)
-                }
-                firstMethod {
-                    name = "getFrameworkInfo"
-                }.hook {
-                    replaceTo(frameworkInfo)
-                }
-            }
+        XposedHelpers.findAndHookMethod(
+            AppBridge::class.java.name,
+            classLoader,
+            "isModuleActive",
+            XC_MethodReplacement.returnConstant(true)
+        )
+
+        XposedHelpers.findAndHookMethod(
+            AppBridge::class.java.name,
+            classLoader,
+            "getPreferenceDirectory",
+            Context::class.java,
+            XC_MethodReplacement.returnConstant(preferenceDirectory)
+        )
     }
-
-    private fun resolveFrameworkInfo(): FrameworkInfo? = null
 }
