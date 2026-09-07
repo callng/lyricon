@@ -25,7 +25,7 @@ configure<ApplicationExtension> {
         }
         dex {
             //强制压缩Dex
-            useLegacyPackaging = true
+           // useLegacyPackaging = true
         }
     }
 
