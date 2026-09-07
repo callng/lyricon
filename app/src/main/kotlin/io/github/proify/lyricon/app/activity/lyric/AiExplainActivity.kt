@@ -168,6 +168,10 @@ private class AiExplainState(
     var showMenu by mutableStateOf(false)
     var thinkingExpanded by mutableStateOf(false)
 
+    // 用户手动滑动标志：一旦用户手动滑动，停止自动滚动
+    var userHasScrolled by mutableStateOf(false)
+        private set
+
     // 增量经 Channel 单消费者串行消费（渲染树内消费，按窗口聚合后 append 到
     // streaming state）：不丢块、不重复、不重建整树——流式期间树稳定不闪烁。
     val reasoningChannel = Channel<String>(Channel.UNLIMITED)
@@ -178,6 +182,13 @@ private class AiExplainState(
         private set
 
     private var job: Job? = null
+
+    /**
+     * 标记用户已手动滑动，停止自动滚动。
+     */
+    fun markUserScrolled() {
+        userHasScrolled = true
+    }
 
     fun startRequest(
         scope: CoroutineScope,
@@ -191,6 +202,8 @@ private class AiExplainState(
         contentVisible = false
         contentEpoch++
         isLoading = true
+        // 重试时重置滚动标志，允许重新自动滚动
+        userHasScrolled = false
 
         job = scope.launch {
             if (lyrics.isBlank()) {
@@ -305,15 +318,22 @@ private fun AiExplainSheet(title: String, artist: String, album: String, lyrics:
 
     LaunchedEffect(Unit) { state.startRequest(scope, context) }
 
-    // 流式滚动：token 到达时立即滚动，避免尾部内容被遮挡
+    // 检测用户手动滑动：一旦用户手动滑动，标记状态并停止自动滚动
+    LaunchedEffect(scrollState.isScrollInProgress) {
+        if (scrollState.isScrollInProgress) {
+            state.markUserScrolled()
+        }
+    }
+
+    // 流式滚动：token 到达时立即滚动，避免尾部内容被遮挡（仅在用户未手动滑动时）
     LaunchedEffect(state.contentText) {
-        if (state.isLoading && state.contentText.isNotEmpty()) {
+        if (state.isLoading && state.contentText.isNotEmpty() && !state.userHasScrolled) {
             scrollState.scrollTo(scrollState.maxValue)
         }
     }
-    // 结束加载时平滑滚到底
+    // 结束加载时平滑滚到底（仅在用户未手动滑动时）
     LaunchedEffect(state.isLoading) {
-        if (!state.isLoading) scrollState.animateScrollTo(scrollState.maxValue)
+        if (!state.isLoading && !state.userHasScrolled) scrollState.animateScrollTo(scrollState.maxValue)
     }
 
     // 右上角"更多"菜单：复制 / 重试

@@ -25,7 +25,6 @@ data class AiConfig(
     val baseUrl: String? = null,
     val temperature: Float = DEFAULT_TEMPERATURE,
     val topP: Float = DEFAULT_TOP_P,
-    val maxTokens: Int = DEFAULT_MAX_TOKENS,
     val presencePenalty: Float = DEFAULT_PRESENCE_PENALTY,
     val frequencyPenalty: Float = DEFAULT_FREQUENCY_PENALTY,
 ) : Parcelable {
@@ -41,7 +40,6 @@ data class AiConfig(
     companion object {
         const val DEFAULT_TEMPERATURE = 0.7f
         const val DEFAULT_TOP_P = 1.0f
-        const val DEFAULT_MAX_TOKENS = 0
         const val DEFAULT_PRESENCE_PENALTY = 0.3f
         const val DEFAULT_FREQUENCY_PENALTY = 0.3f
 
@@ -51,7 +49,7 @@ data class AiConfig(
         return "AiConfig(isUsable=$isUsable," +
                 " frequencyPenalty=$frequencyPenalty, " +
                 "presencePenalty=$presencePenalty," +
-                " maxTokens=$maxTokens, topP=$topP," +
+                "topP=$topP," +
                 " temperature=$temperature, " +
                 "baseUrl=$baseUrl, model=$model," +
                 " apiKey=${apiKey?.take(5)})"

@@ -25,7 +25,7 @@ configure<ApplicationExtension> {
         }
         dex {
             //强制压缩Dex
-           // useLegacyPackaging = true
+            useLegacyPackaging = true
         }
     }
 
@@ -37,16 +37,6 @@ configure<ApplicationExtension> {
         versionName = rootProject.extra["appVersionName"] as String
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-//        androidResources {
-//            @Suppress("UnstableApiUsage")
-//            localeFilters += listOf(
-//                "en",
-//                "zh-rCN",
-//                "zh-rTW",
-//                "zh-rHK"
-//            )
-//        }
     }
 
     signingConfigs {
